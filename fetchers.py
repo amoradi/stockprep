@@ -88,3 +88,80 @@ def alpaca_fetcher(api_key: str, secret_key: str):
         return df
 
     return fetch
+
+
+def nasdaqdatalink_fetcher(api_key: str):
+    """
+    Factory that returns a fetcher for Nasdaq Data Link (Sharadar).
+
+    SURVIVORSHIP BIAS FREE - includes delisted stocks.
+
+    pip install nasdaq-data-link
+
+    Requires Sharadar subscription (~$50/mo for SEP table).
+
+    Usage:
+        fetcher = nasdaqdatalink_fetcher("your_api_key")
+        data = StockData(fetcher)
+    """
+    def fetch(symbols: list, start: str, end: str) -> pd.DataFrame:
+        import nasdaqdatalink
+
+        nasdaqdatalink.ApiConfig.api_key = api_key
+
+        # Sharadar SEP table has daily prices including delisted stocks
+        df = nasdaqdatalink.get_table(
+            "SHARADAR/SEP",
+            ticker=symbols,
+            date={"gte": start, "lte": end},
+            paginate=True,
+        )
+
+        # Pivot to standard format
+        df = df.pivot(index="date", columns="ticker", values="closeadj")
+        df.index = pd.to_datetime(df.index)
+
+        return df
+
+    return fetch
+
+
+def tiingo_fetcher(api_key: str):
+    """
+    Factory that returns a fetcher for Tiingo.
+
+    SURVIVORSHIP BIAS FREE - includes delisted stocks.
+
+    pip install requests
+
+    Free tier available at tiingo.com
+
+    Usage:
+        fetcher = tiingo_fetcher("your_api_key")
+        data = StockData(fetcher)
+    """
+    def fetch(symbols: list, start: str, end: str) -> pd.DataFrame:
+        import requests
+
+        frames = []
+        for symbol in symbols:
+            url = f"https://api.tiingo.com/tiingo/daily/{symbol}/prices"
+            params = {
+                "startDate": start,
+                "endDate": end,
+                "token": api_key,
+            }
+            resp = requests.get(url, params=params)
+            resp.raise_for_status()
+
+            data = resp.json()
+            if data:
+                df = pd.DataFrame(data)
+                df["date"] = pd.to_datetime(df["date"]).dt.tz_localize(None)
+                df = df.set_index("date")[["adjClose"]]
+                df = df.rename(columns={"adjClose": symbol})
+                frames.append(df)
+
+        return pd.concat(frames, axis=1) if frames else pd.DataFrame()
+
+    return fetch

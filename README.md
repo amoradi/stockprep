@@ -62,18 +62,51 @@ def fetcher(symbols: list, start: str, end: str) -> pd.DataFrame:
 
 See `fetchers.py` for ready-to-use examples:
 
-- `yfinance_fetcher` - Yahoo Finance
-- `csv_fetcher(data_dir)` - Local CSV files
-- `alpaca_fetcher(api_key, secret)` - Alpaca Markets API
+| Fetcher | Source | Survivorship Bias Free |
+|---------|--------|------------------------|
+| `yfinance_fetcher` | Yahoo Finance | No |
+| `csv_fetcher(data_dir)` | Local CSV files | Depends on your data |
+| `alpaca_fetcher(api_key, secret)` | Alpaca Markets | No |
+| `nasdaqdatalink_fetcher(api_key)` | Sharadar | Yes |
+| `tiingo_fetcher(api_key)` | Tiingo | Yes |
 
 ```python
 from fetchers import yfinance_fetcher, csv_fetcher
 
-# Yahoo Finance
+# Yahoo Finance (quick and free, but has survivorship bias)
 data = StockData(yfinance_fetcher)
 
 # Local CSVs
 data = StockData(csv_fetcher("./my_data"))
+```
+
+## Data Quality Notes
+
+### Adjusted Close
+
+All example fetchers use **adjusted close** prices, which account for stock splits and dividends. This means `daily_returns()` gives you **total return** (price + dividends), not just price return. This is what you want for backtesting.
+
+### Survivorship Bias
+
+Free data sources (Yahoo Finance, Alpaca) only include stocks that **currently exist**. If you backtest 2008 using today's stock universe, you'll miss companies that went bankrupt (Lehman Brothers, etc.), making your results look artificially good.
+
+**Survivorship bias-free sources:**
+
+| Source | Cost | Notes |
+|--------|------|-------|
+| Sharadar (Nasdaq Data Link) | ~$50/mo | Includes delisted stocks |
+| Tiingo | Free tier | Claims delisted coverage |
+| CRSP | $$$ | Academic gold standard |
+| Polygon.io | Paid tiers | Has delisted data |
+
+```python
+from fetchers import nasdaqdatalink_fetcher, tiingo_fetcher
+
+# Sharadar - paid, comprehensive
+data = StockData(nasdaqdatalink_fetcher("your_api_key"))
+
+# Tiingo - free tier available
+data = StockData(tiingo_fetcher("your_api_key"))
 ```
 
 ## Install
@@ -82,8 +115,10 @@ Just copy `stock_data.py` into your project. That's it.
 
 For fetchers, install what you need:
 ```bash
-pip install yfinance      # for yfinance_fetcher
-pip install alpaca-py     # for alpaca_fetcher
+pip install yfinance           # for yfinance_fetcher
+pip install alpaca-py          # for alpaca_fetcher
+pip install nasdaq-data-link   # for nasdaqdatalink_fetcher
+pip install requests           # for tiingo_fetcher
 ```
 
 ## License
